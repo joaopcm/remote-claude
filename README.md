@@ -1,12 +1,49 @@
 # remote-claude
 
-Remote Claude Code on a Linux VPS, driven from macOS. Multiple parallel sessions (tmux), git worktrees per task, per-repo setup hooks, Cursor remote IDE — all over a private Tailscale network.
+**Run Claude Code on an always-on Linux VPS and drive it from your Mac — multiple agents in parallel, each in its own git worktree, surviving laptop sleep, network drops, and roaming.**
 
 ```
 mac (rc) ──mosh/ssh──▶ VPS ── tmux session per worktree, each running claude
                         ├── ~/repos/<repo>.git        bare clones
                         └── ~/work/<repo>/<branch>/   worktrees
 ```
+
+## Why
+
+Claude Code is great at long-running, autonomous work — but running it on a laptop has problems:
+
+- **Close the lid and the agent dies.** Long tasks (big refactors, test-fixing loops, migrations) get killed by sleep, network changes, or a dead battery.
+- **Parallel work collides.** Two agents in the same checkout step on each other's files, branches, and dev servers.
+- **Your machine becomes the bottleneck.** Installs, builds, and test runs compete with everything else you're doing.
+
+remote-claude moves the agents to a cheap always-on VPS and gives you a tiny CLI (`rc`) to manage them:
+
+- **One tmux session + one git worktree per task.** `rc new dashboard feat-bounce` creates a worktree off the default branch, runs your per-repo setup hook (install deps, fetch secrets, write env files), starts tmux, and launches Claude Code in it. Run as many in parallel as the box can handle — they never touch each other's files.
+- **Sessions are durable.** Detach, close your laptop, switch from wifi to LTE — mosh + tmux keep everything alive. Reattach from anywhere on your tailnet.
+- **Steer from anywhere.** Sessions launch `claude --remote-control` by default, so you can also check in and steer agents from claude.ai/code or the Claude mobile app.
+- **No public attack surface.** Everything rides a private [Tailscale](https://tailscale.com) network with Tailscale SSH — no open SSH port, no key juggling.
+- **Edit remotely when you need to.** `rc ide dashboard feat-bounce` opens Cursor directly on the remote worktree over Remote-SSH.
+
+## Use cases
+
+- Kick off a long refactor before lunch, check on it from your phone, attach from your Mac later.
+- Run 3–5 agents on different features of the same repo simultaneously, each isolated in its own worktree and branch.
+- Keep a beefy build box doing installs/tests/builds while your laptop stays cool.
+- Hand a flaky-test hunt or dependency upgrade to an agent and only reattach when it's done.
+
+## How it works
+
+- **Bare clones + worktrees.** Each repo is bare-cloned once into `~/repos/<repo>.git`. Every task gets a worktree at `~/work/<repo>/<branch>` — cheap to create, fully isolated, trivially removed when the branch merges.
+- **tmux as the session layer.** Each worktree gets a tmux session named `<repo>/<branch>` running Claude Code. `rc` attaches, lists, and kills them.
+- **mosh as the transport.** Interactive commands (`rc new`, `rc attach`) go over mosh, so sessions survive roaming and sleep. Non-interactive ones use plain SSH.
+- **Setup hooks.** Repos need different worktree prep (pnpm install, Doppler, env files). Hooks live in this repo's `setup.d/` — never committed to your project repos.
+
+## Requirements
+
+- A Linux VPS (Debian/Ubuntu — bootstrap uses `apt`)
+- A Mac with [Homebrew](https://brew.sh)
+- A [Tailscale](https://tailscale.com) account (free tier is fine)
+- A Claude subscription or API access for Claude Code
 
 ## VPS setup (once)
 
@@ -21,7 +58,7 @@ Idempotent — safe to re-run anytime. Installs: tmux, mosh, fish, fzf, Tailscal
 sudo tailscale up --ssh    # join tailnet + enable Tailscale SSH (no public SSH needed)
 gh auth login              # git push/pull credentials
 claude                     # then /login
-doppler login
+doppler login              # only if your repos use Doppler secrets
 ```
 
 ## Mac setup (once)
@@ -31,7 +68,7 @@ git clone https://github.com/joaopcm/remote-claude ~/remote-claude
 bash ~/remote-claude/mac/setup.sh   # asks for MagicDNS name + VPS user
 ```
 
-Installs mosh + Tailscale app, writes `Host vps` SSH config, symlinks `rc` into `~/.local/bin`. Sign into Tailscale.app, then `ssh vps` should just work.
+Installs mosh + Tailscale app, writes a `Host vps` SSH config entry, symlinks `rc` into `~/.local/bin`. Sign into Tailscale.app, then `ssh vps` should just work.
 
 ## Daily workflow (from the mac)
 
@@ -45,7 +82,23 @@ rc rm dashboard feat-bounce      # kill session + remove worktree when merged
 rc new dashboard feat-x origin/staging   # optional base ref
 ```
 
-Detach with `C-b d`. Sessions survive disconnects, sleep, and network roaming (mosh); reattach from anywhere on the tailnet. Run as many parallel sessions as you like — one worktree + one claude each.
+Detach with `C-b d`. Sessions survive disconnects, sleep, and network roaming (mosh); reattach from anywhere on the tailnet.
+
+### Command reference
+
+| command | what it does |
+|---|---|
+| `rc clone <owner/repo>` | bare-clone into `~/repos/<repo>.git` on the VPS |
+| `rc new <repo> <branch> [base]` | create worktree (reusing local/remote branch if it exists), run setup hook, start tmux + claude, attach |
+| `rc attach [session]` / `rc` | attach to a session (fzf picker if omitted) |
+| `rc ls` | list tmux sessions and git worktrees |
+| `rc ide <repo> <branch>` | open Cursor on the remote worktree (mac-side) |
+| `rc rm <repo> <branch>` | kill session, remove worktree, optionally delete branch |
+| `rc sync` | mirror local `~/.claude` config to the VPS (mac-side) |
+| `rc ssh` | plain interactive shell on the VPS |
+| `rc path <repo> <branch>` | print worktree path (used internally by `rc ide`) |
+
+`rc new` is safe to re-run: it reuses an existing worktree and session, so it doubles as "attach, creating if needed".
 
 ## Sync Claude config to the VPS
 
@@ -71,9 +124,54 @@ cp setup.d/example.sh setup.d/dashboard.sh   # name must match repo name
 | `$BRANCH` | `feat-bounce` |
 | `$WORKTREE` | `/home/you/work/dashboard/feat-bounce` |
 
-## Notes
+A typical hook:
 
-- Cursor opens remote folders via `vscode-remote://ssh-remote+vps<path>` — needs the Remote-SSH extension and the `Host vps` entry (written by `mac/setup.sh`).
-- `RC_NO_MOSH=1 rc ...` forces plain SSH for interactive commands.
-- Sessions launch `claude --remote-control` by default — steer them from claude.ai/code or the mobile app (requires claude.ai login on the VPS, Claude Code ≥ 2.1.51). Override the launch command with `RC_CLAUDE_CMD` on the VPS.
-- VPS-side overrides: `REPOS_DIR`, `WORK_DIR`. Mac-side config: `~/.config/remote-claude/config`.
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+pnpm install
+doppler setup --project "$REPO" --config dev --no-interactive
+cp "$HOME/secrets/$REPO.env" .env.local
+```
+
+If the hook fails, `rc new` aborts before starting the session. No hook file means setup is skipped silently.
+
+## Configuration
+
+| where | var | default | meaning |
+|---|---|---|---|
+| mac (`~/.config/remote-claude/config`) | `VPS_HOST` | `vps` | SSH host alias for the VPS |
+| mac | `VPS_RC` | `.local/bin/rc` | path to `rc` on the VPS, relative to remote `$HOME` |
+| mac (env) | `RC_NO_MOSH=1` | — | force plain SSH for interactive commands |
+| VPS (env) | `REPOS_DIR` | `~/repos` | where bare clones live |
+| VPS (env) | `WORK_DIR` | `~/work` | where worktrees live |
+| VPS (env) | `RC_CLAUDE_CMD` | `claude --remote-control` | command launched in each new session |
+
+## Notes & troubleshooting
+
+- **Remote control**: `claude --remote-control` lets you steer sessions from claude.ai/code or the mobile app. Requires claude.ai login on the VPS and Claude Code ≥ 2.1.51. Set `RC_CLAUDE_CMD=claude` on the VPS to opt out.
+- **Cursor**: `rc ide` opens `vscode-remote://ssh-remote+vps<path>` — needs the Remote-SSH extension and the `Host vps` SSH entry (written by `mac/setup.sh`).
+- **mosh garbled output / locale errors**: the bootstrap enables UTF-8 locales; re-run it if mosh complains.
+- **`rc rm` refuses on a dirty worktree**: commit/stash first, or force-remove with the `git worktree remove --force` command it prints.
+- **Not on Tailscale?** Nothing in `rc` is Tailscale-specific — any `Host vps` SSH config entry that reaches the box works. Tailscale just makes it safe and zero-config.
+
+## Repo layout
+
+```
+bin/rc          VPS-side CLI (clone, new, attach, ls, path, rm)
+mac/bin/rc      mac-side wrapper (ide, sync, ssh; proxies the rest over mosh/ssh)
+mac/setup.sh    mac one-time setup
+vps/bootstrap.sh  VPS one-time provisioning (idempotent)
+vps/tmux.conf   tmux config symlinked to ~/.tmux.conf
+setup.d/        per-repo worktree setup hooks
+tests/rc.bats   bats tests for the VPS CLI
+```
+
+## Contributing
+
+Issues and PRs welcome. The CLI is plain bash; tests use [bats](https://github.com/bats-core/bats-core):
+
+```sh
+bats tests/rc.bats
+```

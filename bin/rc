@@ -44,8 +44,8 @@ run_setup() {
 
 attach_session() {
   local session="$1"
-  if [ -n "${TMUX:-}" ]; then tmux switch-client -t "=$session"
-  else tmux attach -t "=$session"; fi
+  if [ -n "${TMUX:-}" ]; then tmux switch-client -t "$session"
+  else tmux attach -t "$session"; fi
 }
 
 cmd_new() {
@@ -68,9 +68,9 @@ cmd_new() {
     run_setup "$repo" "$branch" "$wt"
   fi
   local session; session="$(session_name "$repo" "$branch")"
-  if ! tmux has-session -t "=$session" 2>/dev/null; then
+  if ! tmux has-session -t "$session" 2>/dev/null; then
     tmux new-session -d -s "$session" -c "$wt"
-    tmux send-keys -t "=$session" "$CLAUDE_CMD" Enter
+    tmux send-keys -t "$session" "$CLAUDE_CMD" Enter
   fi
   attach_session "$session"
 }
@@ -104,7 +104,7 @@ cmd_rm() {
   local repo="${1:?usage: rc rm <repo> <branch>}" branch="${2:?usage: rc rm <repo> <branch>}"
   local wt="$WORK_DIR/$repo/$branch"
   local git_dir; git_dir="$(repo_git_dir "$repo")"
-  tmux kill-session -t "=$(session_name "$repo" "$branch")" 2>/dev/null || true
+  tmux kill-session -t "$(session_name "$repo" "$branch")" 2>/dev/null || true
   if [ -d "$wt" ]; then
     git -C "$git_dir" worktree remove "$wt" \
       || die "worktree dirty — commit/stash, or: git -C $git_dir worktree remove --force $wt"

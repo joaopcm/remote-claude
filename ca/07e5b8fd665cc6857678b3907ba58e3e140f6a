@@ -1,0 +1,21 @@
+vps/bootstrap.sh
+  s_c5c627b7d16deb::t_1e69c7be034ddd 1-68
+vps/tmux.conf
+  s_c5c627b7d16deb::t_ad5616fb095595 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "ca07e5b8fd665cc6857678b3907ba58e3e140f6a",
+  "prompts": {},
+  "sessions": {
+    "s_c5c627b7d16deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "167ea48d-4127-419e-a45a-8384a075349b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>"
+    }
+  }
+}

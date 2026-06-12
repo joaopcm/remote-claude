@@ -1,0 +1,20 @@
+bin/rc
+  s_c5c627b7d16deb::t_2b2ac168a23ef9 23-43,45-73,75-82,84-143
+  s_c5c627b7d16deb::t_959a77129052a8 44,74,83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "fc363f7afcf7a35ca067d053d0aefea3a1ab700a",
+  "prompts": {},
+  "sessions": {
+    "s_c5c627b7d16deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "167ea48d-4127-419e-a45a-8384a075349b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>"
+    }
+  }
+}

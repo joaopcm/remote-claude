@@ -1,0 +1,19 @@
+README.md
+  s_c5c627b7d16deb::t_0428222eba06bb 14,30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a2093da0370f50a3056e7dd62ed7b00fe470c532",
+  "prompts": {},
+  "sessions": {
+    "s_c5c627b7d16deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "167ea48d-4127-419e-a45a-8384a075349b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>"
+    }
+  }
+}

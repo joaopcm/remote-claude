@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG="${RC_CONFIG:-$HOME/.config/remote-claude/config}"
+# shellcheck source=/dev/null
+[ -f "$CONFIG" ] && source "$CONFIG"
+VPS_HOST="${VPS_HOST:-vps}"
+VPS_RC="${VPS_RC:-.local/bin/rc}"   # relative to remote $HOME
+
+interactive() {
+  if command -v mosh >/dev/null 2>&1 && [ "${RC_NO_MOSH:-0}" != 1 ]; then
+    exec mosh "$VPS_HOST" -- "$VPS_RC" "$@"
+  fi
+  exec ssh -t "$VPS_HOST" "$VPS_RC" "$@"
+}
+
+cmd_ide() {
+  local repo="${1:?usage: rc ide <repo> <branch>}" branch="${2:?usage: rc ide <repo> <branch>}"
+  local path
+  # shellcheck disable=SC2029  # client-side expansion intended: pass values to remote rc
+  path="$(ssh "$VPS_HOST" "$VPS_RC" path "$repo" "$branch")"
+  cursor --folder-uri "vscode-remote://ssh-remote+${VPS_HOST}${path}"
+}
+
+cmd="${1:-attach}"
+case "$cmd" in
+  ide)        shift; cmd_ide "$@" ;;
+  ssh)        exec ssh -t "$VPS_HOST" ;;
+  new|attach) interactive "$@" ;;
+  *)          exec ssh -t "$VPS_HOST" "$VPS_RC" "$@" ;;
+esac

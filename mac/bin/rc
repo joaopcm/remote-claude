@@ -41,6 +41,9 @@ cmd_sync() {
       rsync -aL "$src" "$VPS_HOST:.claude/$item"
     fi
   done
+  echo "sync: rewriting mac home paths in plugin registry"
+  # shellcheck disable=SC2029  # $HOME expands locally on purpose: it's the mac path being replaced
+  ssh "$VPS_HOST" "perl -pi -e 's|\Q$HOME\E|\$ENV{HOME}|g' .claude/plugins/*.json"
   if [ -d "$HOME/.config/ccstatusline" ]; then
     echo "sync: ccstatusline/"
     rsync -aL --delete --rsync-path="mkdir -p .config && rsync" \

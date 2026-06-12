@@ -7,7 +7,11 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 log "apt packages"
 sudo apt-get update -y
-sudo apt-get install -y git tmux mosh fish fzf jq curl ca-certificates
+sudo apt-get install -y git tmux mosh fish fzf jq curl ca-certificates locales
+
+log "locales (mosh needs UTF-8)"
+sudo sed -i -E 's/^# *(en_US.UTF-8|pt_BR.UTF-8)/\1/' /etc/locale.gen
+sudo locale-gen
 
 if ! have tailscale; then
   log "tailscale"

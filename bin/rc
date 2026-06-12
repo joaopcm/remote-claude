@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export VOLTA_HOME="${VOLTA_HOME:-$HOME/.volta}"
+export VOLTA_FEATURE_PNPM=1
+export PATH="$VOLTA_HOME/bin:$HOME/.local/bin:$PATH"
+
+RC_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+REPOS_DIR="${REPOS_DIR:-$HOME/repos}"
+WORK_DIR="${WORK_DIR:-$HOME/work}"
+
+die() { printf 'rc: %s\n' "$*" >&2; exit 1; }
+
+session_name() { printf '%s/%s' "$1" "$2" | tr '.:' '__'; }
+
+repo_git_dir() { printf '%s/%s.git' "$REPOS_DIR" "$1"; }
+
+default_branch() {
+  git -C "$1" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
+    | sed 's|^origin/||' || echo main
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

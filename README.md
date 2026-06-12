@@ -11,7 +11,7 @@ mac (rc) ──mosh/ssh──▶ VPS ── tmux session per worktree, each runn
 ## VPS setup (once)
 
 ```sh
-git clone https://github.com/jopcmelo/remote-claude ~/remote-claude
+git clone https://github.com/joaopcm/remote-claude ~/remote-claude
 bash ~/remote-claude/vps/bootstrap.sh
 ```
 
@@ -27,7 +27,7 @@ doppler login
 ## Mac setup (once)
 
 ```sh
-git clone https://github.com/jopcmelo/remote-claude ~/remote-claude
+git clone https://github.com/joaopcm/remote-claude ~/remote-claude
 bash ~/remote-claude/mac/setup.sh   # asks for MagicDNS name + VPS user
 ```
 

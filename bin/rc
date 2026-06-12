@@ -8,6 +8,7 @@ export PATH="$VOLTA_HOME/bin:$HOME/.local/bin:$PATH"
 RC_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 REPOS_DIR="${REPOS_DIR:-$HOME/repos}"
 WORK_DIR="${WORK_DIR:-$HOME/work}"
+CLAUDE_CMD="${RC_CLAUDE_CMD:-claude --remote-control}"
 
 die() { printf 'rc: %s\n' "$*" >&2; exit 1; }
 
@@ -69,7 +70,7 @@ cmd_new() {
   local session; session="$(session_name "$repo" "$branch")"
   if ! tmux has-session -t "=$session" 2>/dev/null; then
     tmux new-session -d -s "$session" -c "$wt"
-    tmux send-keys -t "=$session" 'claude' Enter
+    tmux send-keys -t "=$session" "$CLAUDE_CMD" Enter
   fi
   attach_session "$session"
 }

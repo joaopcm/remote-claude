@@ -75,4 +75,5 @@ cp setup.d/example.sh setup.d/dashboard.sh   # name must match repo name
 
 - Cursor opens remote folders via `vscode-remote://ssh-remote+vps<path>` — needs the Remote-SSH extension and the `Host vps` entry (written by `mac/setup.sh`).
 - `RC_NO_MOSH=1 rc ...` forces plain SSH for interactive commands.
+- Sessions launch `claude --remote-control` by default — steer them from claude.ai/code or the mobile app (requires claude.ai login on the VPS, Claude Code ≥ 2.1.51). Override the launch command with `RC_CLAUDE_CMD` on the VPS.
 - VPS-side overrides: `REPOS_DIR`, `WORK_DIR`. Mac-side config: `~/.config/remote-claude/config`.

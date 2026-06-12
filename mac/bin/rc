@@ -23,6 +23,10 @@ cmd_ide() {
 }
 
 cmd_sync() {
+  local rc_root
+  rc_root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
+  echo "sync: setup.d/ (worktree hooks)"
+  rsync -aL --delete "$rc_root/setup.d/" "$VPS_HOST:remote-claude/setup.d/"
   local items=(CLAUDE.md RTK.md rules skills hooks file-suggestion.sh plugins)
   local src
   ssh "$VPS_HOST" 'mkdir -p .claude'

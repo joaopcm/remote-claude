@@ -110,7 +110,7 @@ Pushes your local `~/.claude` essentials to the VPS: `CLAUDE.md`, `RTK.md`, `rul
 
 ## Per-repo hooks
 
-Each repo can need different worktree setup (pnpm install, Doppler config, env files). Hooks live **in this repo only** — never committed to the project repos:
+Each repo can need different worktree setup (pnpm install, Doppler config, env files). Hooks live in this repo's `setup.d/` but are **git-ignored** (only `example.sh` is tracked) — they reach the VPS via `rc sync`, not git:
 
 ```sh
 cp setup.d/example.sh setup.d/dashboard.sh   # name must match repo name

@@ -20,4 +20,125 @@ default_branch() {
     | sed 's|^origin/||' || echo main
 }
 
+cmd_clone() {
+  local slug="${1:?usage: rc clone <owner/repo>}"
+  local repo="${slug##*/}"
+  local dir; dir="$(repo_git_dir "$repo")"
+  [ -d "$dir" ] && die "$dir already exists"
+  gh repo clone "$slug" "$dir" -- --bare
+  git -C "$dir" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+  git -C "$dir" fetch origin --prune
+  git -C "$dir" remote set-head origin --auto
+  echo "cloned $slug -> $dir"
+}
+
+run_setup() {
+  local repo="$1" branch="$2" wt="$3"
+  local hook="$RC_ROOT/setup.d/$repo.sh"
+  [ -f "$hook" ] || { echo "rc: no hook setup.d/$repo.sh, skipping"; return 0; }
+  echo "rc: running setup.d/$repo.sh"
+  (cd "$wt" && REPO="$repo" BRANCH="$branch" WORKTREE="$wt" bash "$hook") \
+    || die "setup hook failed"
+}
+
+attach_session() {
+  local session="$1"
+  if [ -n "${TMUX:-}" ]; then tmux switch-client -t "=$session"
+  else tmux attach -t "=$session"; fi
+}
+
+cmd_new() {
+  local repo="${1:?usage: rc new <repo> <branch> [base]}"
+  local branch="${2:?usage: rc new <repo> <branch> [base]}"
+  local git_dir; git_dir="$(repo_git_dir "$repo")"
+  [ -d "$git_dir" ] || die "no repo '$repo' — run: rc clone <owner>/$repo"
+  local wt="$WORK_DIR/$repo/$branch"
+  if [ ! -d "$wt" ]; then
+    git -C "$git_dir" fetch origin --prune
+    local base="${3:-origin/$(default_branch "$git_dir")}"
+    mkdir -p "$(dirname "$wt")"
+    if git -C "$git_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+      git -C "$git_dir" worktree add "$wt" "$branch"
+    elif git -C "$git_dir" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+      git -C "$git_dir" worktree add --track -b "$branch" "$wt" "origin/$branch"
+    else
+      git -C "$git_dir" worktree add -b "$branch" "$wt" "$base"
+    fi
+    run_setup "$repo" "$branch" "$wt"
+  fi
+  local session; session="$(session_name "$repo" "$branch")"
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$wt"
+    tmux send-keys -t "=$session" 'claude' Enter
+  fi
+  attach_session "$session"
+}
+
+cmd_attach() {
+  local session="${1:-}"
+  if [ -z "$session" ]; then
+    session="$(tmux list-sessions -F '#S' 2>/dev/null | fzf --prompt='session> ')" \
+      || die "no session selected"
+  fi
+  attach_session "$session"
+}
+
+cmd_ls() {
+  echo "── sessions"
+  tmux list-sessions -F '  #S' 2>/dev/null || echo "  (none)"
+  echo "── worktrees"
+  local gd
+  for gd in "$REPOS_DIR"/*.git; do
+    [ -d "$gd" ] || continue
+    git -C "$gd" worktree list | grep -v ' (bare)' | sed 's/^/  /' || true
+  done
+}
+
+cmd_path() {
+  local repo="${1:?usage: rc path <repo> <branch>}" branch="${2:?usage: rc path <repo> <branch>}"
+  echo "$WORK_DIR/$repo/$branch"
+}
+
+cmd_rm() {
+  local repo="${1:?usage: rc rm <repo> <branch>}" branch="${2:?usage: rc rm <repo> <branch>}"
+  local wt="$WORK_DIR/$repo/$branch"
+  local git_dir; git_dir="$(repo_git_dir "$repo")"
+  tmux kill-session -t "=$(session_name "$repo" "$branch")" 2>/dev/null || true
+  if [ -d "$wt" ]; then
+    git -C "$git_dir" worktree remove "$wt" \
+      || die "worktree dirty — commit/stash, or: git -C $git_dir worktree remove --force $wt"
+  fi
+  local yn
+  read -rp "delete local branch '$branch'? [y/N] " yn
+  [[ "$yn" == [yY] ]] && git -C "$git_dir" branch -D "$branch"
+  echo "removed $repo/$branch"
+}
+
+usage() {
+  cat <<'EOF'
+rc — remote claude code sessions
+  rc clone <owner/repo>           bare-clone into ~/repos
+  rc new <repo> <branch> [base]   worktree + setup hook + tmux session running claude
+  rc attach [session]             attach (fzf picker if omitted)
+  rc ls                           list sessions + worktrees
+  rc path <repo> <branch>         print worktree path
+  rc rm <repo> <branch>           kill session + remove worktree
+EOF
+}
+
+main() {
+  local cmd="${1:-attach}"
+  shift || true
+  case "$cmd" in
+    clone)  cmd_clone "$@" ;;
+    new)    cmd_new "$@" ;;
+    attach) cmd_attach "$@" ;;
+    ls)     cmd_ls "$@" ;;
+    path)   cmd_path "$@" ;;
+    rm)     cmd_rm "$@" ;;
+    -h|--help|help) usage ;;
+    *) usage; die "unknown command: $cmd" ;;
+  esac
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

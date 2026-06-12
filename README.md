@@ -53,7 +53,7 @@ Detach with `C-b d`. Sessions survive disconnects, sleep, and network roaming (m
 rc sync
 ```
 
-Pushes your local `~/.claude` essentials to the VPS: `CLAUDE.md`, `RTK.md`, `rules/`, `skills/`, `hooks/`, `file-suggestion.sh`, `plugins/`, and a Linux-safe `settings.json` (hook entries referencing `/Users/`, `terminal-notifier`, or `codedb` are stripped, along with mac-only keys). Re-run anytime — it's a one-way mac → VPS mirror (`--delete` inside synced dirs).
+Pushes your local `~/.claude` essentials to the VPS: `CLAUDE.md`, `RTK.md`, `rules/`, `skills/`, `hooks/`, `file-suggestion.sh`, `plugins/`, and a Linux-safe `settings.json` (hook entries referencing `/Users/` or `codedb` are stripped, along with mac-only keys). Re-run anytime — it's a one-way mac → VPS mirror (`--delete` inside synced dirs).
 
 ## Per-repo hooks
 

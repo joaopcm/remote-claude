@@ -43,7 +43,7 @@ import json, sys
 
 settings = json.load(open(sys.argv[1]))
 
-MAC_ONLY = ("/Users/", "terminal-notifier", "codedb")
+MAC_ONLY = ("/Users/", "codedb")
 def portable(hook):
     return not any(marker in hook.get("command", "") for marker in MAC_ONLY)
 

@@ -22,9 +22,52 @@ cmd_ide() {
   cursor --folder-uri "vscode-remote://ssh-remote+${VPS_HOST}${path}"
 }
 
+cmd_sync() {
+  local items=(CLAUDE.md RTK.md rules skills hooks file-suggestion.sh plugins)
+  local src
+  ssh "$VPS_HOST" 'mkdir -p .claude'
+  for item in "${items[@]}"; do
+    src="$HOME/.claude/$item"
+    [ -e "$src" ] || continue
+    if [ -d "$src" ] || { [ -L "$src" ] && [ -d "$(readlink "$src")" ]; }; then
+      echo "sync: $item/"
+      rsync -aL --delete "$src/" "$VPS_HOST:.claude/$item/"
+    else
+      echo "sync: $item"
+      rsync -aL "$src" "$VPS_HOST:.claude/$item"
+    fi
+  done
+  echo "sync: settings.json (mac-only hooks stripped)"
+  python3 - "$HOME/.claude/settings.json" <<'PY' | ssh "$VPS_HOST" 'cat > .claude/settings.json'
+import json, sys
+
+settings = json.load(open(sys.argv[1]))
+
+MAC_ONLY = ("/Users/", "terminal-notifier", "codedb")
+def portable(hook):
+    return not any(marker in hook.get("command", "") for marker in MAC_ONLY)
+
+hooks = settings.get("hooks", {})
+for event in list(hooks):
+    entries = hooks[event]
+    for entry in entries:
+        entry["hooks"] = [h for h in entry.get("hooks", []) if portable(h)]
+    hooks[event] = [e for e in entries if e["hooks"]]
+    if not hooks[event]:
+        del hooks[event]
+
+for mac_key in ("preferredNotifChannel", "voiceEnabled"):
+    settings.pop(mac_key, None)
+
+print(json.dumps(settings, indent=2))
+PY
+  echo "sync: done"
+}
+
 cmd="${1:-attach}"
 case "$cmd" in
   ide)        shift; cmd_ide "$@" ;;
+  sync)       cmd_sync ;;
   ssh)        exec ssh -t "$VPS_HOST" ;;
   new|attach) interactive "$@" ;;
   *)          exec ssh -t "$VPS_HOST" "$VPS_RC" "$@" ;;

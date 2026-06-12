@@ -37,6 +37,11 @@ cmd_sync() {
       rsync -aL "$src" "$VPS_HOST:.claude/$item"
     fi
   done
+  if [ -d "$HOME/.config/ccstatusline" ]; then
+    echo "sync: ccstatusline/"
+    rsync -aL --delete --rsync-path="mkdir -p .config && rsync" \
+      "$HOME/.config/ccstatusline/" "$VPS_HOST:.config/ccstatusline/"
+  fi
   echo "sync: settings.json (mac-only hooks stripped)"
   python3 - "$HOME/.claude/settings.json" <<'PY' | ssh "$VPS_HOST" 'cat > .claude/settings.json'
 import json, sys

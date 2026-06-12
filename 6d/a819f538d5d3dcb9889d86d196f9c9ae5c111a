@@ -1,0 +1,23 @@
+mac/bin/rc
+  s_c5c627b7d16deb::t_e1f46e7b879778 19,21
+  s_c5c627b7d16deb::t_df70150901c8ae 20
+  s_c5c627b7d16deb::t_b5dcde8b5fb728 1-18,22-31
+mac/setup.sh
+  s_c5c627b7d16deb::t_b98a88b8966b15 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "6da819f538d5d3dcb9889d86d196f9c9ae5c111a",
+  "prompts": {},
+  "sessions": {
+    "s_c5c627b7d16deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "167ea48d-4127-419e-a45a-8384a075349b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>"
+    }
+  }
+}

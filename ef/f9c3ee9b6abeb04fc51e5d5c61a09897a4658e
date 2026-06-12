@@ -1,0 +1,21 @@
+mac/bin/rc
+  s_c5c627b7d16deb::t_80c9c295ddc0a2 46
+README.md
+  s_c5c627b7d16deb::t_2eb75dbfc50776 56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "eff9c3ee9b6abeb04fc51e5d5c61a09897a4658e",
+  "prompts": {},
+  "sessions": {
+    "s_c5c627b7d16deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "167ea48d-4127-419e-a45a-8384a075349b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "João Melo <jopcmelo@gmail.com>"
+    }
+  }
+}

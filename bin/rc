@@ -21,6 +21,14 @@ default_branch() {
     | sed 's|^origin/||' || echo main
 }
 
+prune_empty_dirs() {
+  local dir="$1"
+  while [ "$dir" != "$WORK_DIR" ] && [ "$dir" != "/" ]; do
+    rmdir "$dir" 2>/dev/null || break
+    dir="$(dirname "$dir")"
+  done
+}
+
 cmd_clone() {
   local slug="${1:?usage: rc clone <owner/repo>}"
   local repo="${slug##*/}"
@@ -33,13 +41,17 @@ cmd_clone() {
   echo "cloned $slug -> $dir"
 }
 
-run_setup() {
-  local repo="$1" branch="$2" wt="$3"
+# The command sent into a fresh tmux session: run the setup hook (if any) then
+# claude — all inside tmux, so the install survives disconnects and any failure
+# stays on screen instead of tearing down the mosh connection.
+launch_cmd() {
+  local repo="$1" branch="$2" wt="$3" fresh="$4"
   local hook="$RC_ROOT/setup.d/$repo.sh"
-  [ -f "$hook" ] || { echo "rc: no hook setup.d/$repo.sh, skipping"; return 0; }
-  echo "rc: running setup.d/$repo.sh"
-  if ! (cd "$wt" && REPO="$repo" BRANCH="$branch" WORKTREE="$wt" bash "$hook"); then
-    echo "rc: setup hook failed — worktree is ready, opening session anyway" >&2
+  if [ "$fresh" = 1 ] && [ -f "$hook" ]; then
+    printf 'env REPO=%s BRANCH=%s WORKTREE=%s bash %s; %s' \
+      "$repo" "$branch" "$wt" "$hook" "$CLAUDE_CMD"
+  else
+    printf '%s' "$CLAUDE_CMD"
   fi
 }
 
@@ -54,8 +66,9 @@ cmd_new() {
   local branch="${2:?usage: rc new <repo> <branch> [base]}"
   local git_dir; git_dir="$(repo_git_dir "$repo")"
   [ -d "$git_dir" ] || die "no repo '$repo' — run: rc clone <owner>/$repo"
-  local wt="$WORK_DIR/$repo/$branch"
+  local wt="$WORK_DIR/$repo/$branch" fresh=0
   if [ ! -d "$wt" ]; then
+    fresh=1
     git -C "$git_dir" fetch origin --prune
     local base="${3:-origin/$(default_branch "$git_dir")}"
     mkdir -p "$(dirname "$wt")"
@@ -66,12 +79,11 @@ cmd_new() {
     else
       git -C "$git_dir" worktree add -b "$branch" "$wt" "$base"
     fi
-    run_setup "$repo" "$branch" "$wt"
   fi
   local session; session="$(session_name "$repo" "$branch")"
   if ! tmux has-session -t "$session" 2>/dev/null; then
     tmux new-session -d -s "$session" -c "$wt"
-    tmux send-keys -t "$session" "$CLAUDE_CMD" Enter
+    tmux send-keys -t "$session" "$(launch_cmd "$repo" "$branch" "$wt" "$fresh")" Enter
   fi
   attach_session "$session"
 }
@@ -85,9 +97,29 @@ cmd_attach() {
   attach_session "$session"
 }
 
+cmd_peek() {
+  local session="${1:-}"
+  if [ -z "$session" ]; then
+    session="$(tmux list-sessions -F '#S' 2>/dev/null | fzf --prompt='peek> ')" \
+      || die "no session selected"
+  fi
+  tmux has-session -t "$session" 2>/dev/null || die "no session '$session'"
+  tmux capture-pane -pt "$session" -S -200
+}
+
 cmd_ls() {
   echo "── sessions"
-  tmux list-sessions -F '  #S' 2>/dev/null || echo "  (none)"
+  if tmux list-sessions -F '#S' >/dev/null 2>&1; then
+    local s last
+    while IFS= read -r s; do
+      last="$(tmux capture-pane -pt "$s" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -1 \
+        | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | cut -c1-72 | iconv -f UTF-8 -t UTF-8 -c)"
+      printf '  %s %s  %s\n' \
+        "$(tmux display-message -pt "$s" '#{?session_attached,●,○}')" "$s" "$last"
+    done < <(tmux list-sessions -F '#S' 2>/dev/null)
+  else
+    echo "  (none)"
+  fi
   echo "── worktrees"
   local gd
   for gd in "$REPOS_DIR"/*.git; do
@@ -109,11 +141,47 @@ cmd_rm() {
   if [ -d "$wt" ]; then
     git -C "$git_dir" worktree remove "$wt" \
       || die "worktree dirty — commit/stash, or: git -C $git_dir worktree remove --force $wt"
+    prune_empty_dirs "$(dirname "$wt")"
   fi
   local yn
   read -rp "delete local branch '$branch'? [y/N] " yn
   [[ "$yn" == [yY] ]] && git -C "$git_dir" branch -D "$branch"
   echo "removed $repo/$branch"
+}
+
+prune_one() {
+  local gd="$1" repo="$2" def="$3" wt="$4" branch="$5" dry="$6"
+  [ -n "$branch" ] && [ "$branch" != "$def" ] || return 0
+  [ "$(git -C "$gd" for-each-ref --format='%(upstream:track)' "refs/heads/$branch")" = "[gone]" ] \
+    || return 0
+  if [ "$dry" = 1 ]; then echo "would prune $repo/$branch"; return 0; fi
+  if ! git -C "$gd" worktree remove "$wt" 2>/dev/null; then
+    echo "rc: $repo/$branch dirty — skipping (use rc rm to force)" >&2; return 0
+  fi
+  tmux kill-session -t "$(session_name "$repo" "$branch")" 2>/dev/null || true
+  git -C "$gd" branch -D "$branch" >/dev/null 2>&1 || true
+  prune_empty_dirs "$(dirname "$wt")"
+  echo "pruned $repo/$branch"
+}
+
+cmd_prune() {
+  local dry=0
+  [ "${1:-}" = "-n" ] && dry=1
+  local gd repo def line wt branch
+  for gd in "$REPOS_DIR"/*.git; do
+    [ -d "$gd" ] || continue
+    repo="$(basename "$gd" .git)"
+    git -C "$gd" fetch origin --prune >/dev/null 2>&1 || true
+    def="$(default_branch "$gd")"
+    wt=""; branch=""
+    while IFS= read -r line; do
+      case "$line" in
+        "worktree "*) wt="${line#worktree }" ;;
+        "branch "*)   branch="${line#branch refs/heads/}" ;;
+        "")           prune_one "$gd" "$repo" "$def" "$wt" "$branch" "$dry"; wt=""; branch="" ;;
+      esac
+    done < <(git -C "$gd" worktree list --porcelain; echo)
+  done
 }
 
 usage() {
@@ -122,9 +190,11 @@ rc — remote claude code sessions
   rc clone <owner/repo>           bare-clone into ~/repos
   rc new <repo> <branch> [base]   worktree + setup hook + tmux session running claude
   rc attach [session]             attach (fzf picker if omitted)
-  rc ls                           list sessions + worktrees
+  rc peek [session]               print a session's recent output without attaching
+  rc ls                           list sessions (● attached / ○ detached) + worktrees
   rc path <repo> <branch>         print worktree path
   rc rm <repo> <branch>           kill session + remove worktree
+  rc prune [-n]                   remove worktrees whose remote branch is gone (-n = dry run)
 EOF
 }
 
@@ -135,9 +205,11 @@ main() {
     clone)  cmd_clone "$@" ;;
     new)    cmd_new "$@" ;;
     attach) cmd_attach "$@" ;;
+    peek)   cmd_peek "$@" ;;
     ls)     cmd_ls "$@" ;;
     path)   cmd_path "$@" ;;
     rm)     cmd_rm "$@" ;;
+    prune)  cmd_prune "$@" ;;
     -h|--help|help) usage ;;
     *) usage; die "unknown command: $cmd" ;;
   esac

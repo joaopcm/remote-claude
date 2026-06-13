@@ -76,9 +76,11 @@ Installs mosh + Tailscale app, writes a `Host vps` SSH config entry, symlinks `r
 rc clone resend/dashboard        # once per repo — bare clone on the VPS
 rc new dashboard feat-bounce     # worktree + setup hook + tmux + claude, attaches
 rc                               # fzf session picker (same as: rc attach)
-rc ls                            # sessions + worktrees overview
+rc ls                            # sessions (● attached / ○ detached, last line) + worktrees
+rc peek dashboard/feat-bounce    # glance at a session's output without attaching
 rc ide dashboard feat-bounce     # open Cursor on the remote worktree
 rc rm dashboard feat-bounce      # kill session + remove worktree when merged
+rc prune                         # sweep worktrees whose remote branch was deleted
 rc new dashboard feat-x origin/staging   # optional base ref
 ```
 
@@ -91,9 +93,11 @@ Detach with `C-b d`. Sessions survive disconnects, sleep, and network roaming (m
 | `rc clone <owner/repo>` | bare-clone into `~/repos/<repo>.git` on the VPS |
 | `rc new <repo> <branch> [base]` | create worktree (reusing local/remote branch if it exists), run setup hook, start tmux + claude, attach |
 | `rc attach [session]` / `rc` | attach to a session (fzf picker if omitted) |
-| `rc ls` | list tmux sessions and git worktrees |
+| `rc peek [session]` | print a session's recent output without attaching (fzf picker if omitted) |
+| `rc ls` | list tmux sessions (● attached / ○ detached, with each session's last output line) and git worktrees |
 | `rc ide <repo> <branch>` | open Cursor on the remote worktree (mac-side) |
-| `rc rm <repo> <branch>` | kill session, remove worktree, optionally delete branch |
+| `rc rm <repo> <branch>` | kill session, remove worktree (and empty parent dirs), optionally delete branch |
+| `rc prune [-n]` | remove every worktree whose remote branch is gone (deleted/merged on origin); `-n` previews without deleting |
 | `rc sync` | mirror local `~/.claude` config to the VPS (mac-side) |
 | `rc ssh` | plain interactive shell on the VPS |
 | `rc path <repo> <branch>` | print worktree path (used internally by `rc ide`) |
@@ -116,7 +120,7 @@ Each repo can need different worktree setup (pnpm install, Doppler config, env f
 cp setup.d/example.sh setup.d/dashboard.sh   # name must match repo name
 ```
 
-`rc new` runs the hook after creating the worktree, with cwd set to the worktree and env:
+`rc new` runs the hook *inside the new tmux session*, as the first command before claude, with cwd set to the worktree and env:
 
 | var | example |
 |---|---|
@@ -135,7 +139,7 @@ doppler setup --project "$REPO" --config dev --no-interactive
 cp "$HOME/secrets/$REPO.env" .env.local
 ```
 
-If the hook fails, `rc new` aborts before starting the session. No hook file means setup is skipped silently.
+Because the hook runs inside the session, its output (and any failure) stays on screen, and a long `pnpm install` survives a disconnect. If the hook fails, claude still launches afterward — you land in the worktree with the error visible rather than getting dropped out of mosh. No hook file means setup is skipped silently.
 
 ## Configuration
 
@@ -153,17 +157,21 @@ If the hook fails, `rc new` aborts before starting the session. No hook file mea
 - **Remote control**: `claude --remote-control` lets you steer sessions from claude.ai/code or the mobile app. Requires claude.ai login on the VPS and Claude Code ≥ 2.1.51. Set `RC_CLAUDE_CMD=claude` on the VPS to opt out.
 - **Cursor**: `rc ide` opens `vscode-remote://ssh-remote+vps<path>` — needs the Remote-SSH extension and the `Host vps` SSH entry (written by `mac/setup.sh`).
 - **mosh garbled output / locale errors**: the bootstrap enables UTF-8 locales; re-run it if mosh complains.
+- **Shift+Enter submits instead of adding a newline**: mosh can't carry the modern keyboard protocols (Kitty/CSI-u) that terminals use to signal Shift+Enter, so multi-line entry over mosh only works when your terminal emits a plain line feed for it — which some keyboard layouts (e.g. Brazilian ABNT) break. Use **`Ctrl+J`** or **`\` then Enter** for newlines; both are plain bytes that work over mosh on any layout. To keep Shift+Enter, bind it to send hex `0x0a` in your terminal (iTerm2: Settings → Profiles → Keys → add Shift+Return → "Send Hex Code" `0x0a`).
 - **`rc rm` refuses on a dirty worktree**: commit/stash first, or force-remove with the `git worktree remove --force` command it prints.
+- **Tidy up merged branches**: `rc prune` removes every worktree whose remote branch was deleted on origin (run `rc prune -n` first to preview). Dirty worktrees are skipped.
 - **Not on Tailscale?** Nothing in `rc` is Tailscale-specific — any `Host vps` SSH config entry that reaches the box works. Tailscale just makes it safe and zero-config.
 
 ## Repo layout
 
 ```
-bin/rc          VPS-side CLI (clone, new, attach, ls, path, rm)
+bin/rc          VPS-side CLI (clone, new, attach, peek, ls, path, rm, prune)
 mac/bin/rc      mac-side wrapper (ide, sync, ssh; proxies the rest over mosh/ssh)
 mac/setup.sh    mac one-time setup
+mac/completions/rc.fish  fish tab-completion for the mac CLI
 vps/bootstrap.sh  VPS one-time provisioning (idempotent)
 vps/tmux.conf   tmux config symlinked to ~/.tmux.conf
+vps/completions/rc.fish  fish tab-completion when SSH'd into the VPS
 setup.d/        per-repo worktree setup hooks
 tests/rc.bats   bats tests for the VPS CLI
 ```

@@ -14,6 +14,8 @@ cat > "$HOME/.config/remote-claude/config" <<EOF
 VPS_HOST=vps
 EOF
 ln -sf "$RC_ROOT/mac/bin/rc" "$HOME/.local/bin/rc"
+mkdir -p "$HOME/.config/fish/completions"
+ln -sf "$RC_ROOT/mac/completions/rc.fish" "$HOME/.config/fish/completions/rc.fish"
 
 if ! grep -qE '^Host vps$' "$HOME/.ssh/config" 2>/dev/null; then
   cat >> "$HOME/.ssh/config" <<EOF

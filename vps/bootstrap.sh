@@ -48,9 +48,11 @@ if ! have claude && [ ! -x "$HOME/.local/bin/claude" ]; then
 fi
 
 log "dirs, links, shell config"
-mkdir -p "$HOME/repos" "$HOME/work" "$HOME/.local/bin" "$HOME/.config/fish/conf.d"
+mkdir -p "$HOME/repos" "$HOME/work" "$HOME/.local/bin" \
+  "$HOME/.config/fish/conf.d" "$HOME/.config/fish/completions"
 ln -sf "$RC_ROOT/vps/tmux.conf" "$HOME/.tmux.conf"
 ln -sf "$RC_ROOT/bin/rc" "$HOME/.local/bin/rc"
+ln -sf "$RC_ROOT/vps/completions/rc.fish" "$HOME/.config/fish/completions/rc.fish"
 cat > "$HOME/.config/fish/conf.d/remote-claude.fish" <<EOF
 set -gx VOLTA_HOME \$HOME/.volta
 set -gx VOLTA_FEATURE_PNPM 1

@@ -38,8 +38,9 @@ run_setup() {
   local hook="$RC_ROOT/setup.d/$repo.sh"
   [ -f "$hook" ] || { echo "rc: no hook setup.d/$repo.sh, skipping"; return 0; }
   echo "rc: running setup.d/$repo.sh"
-  (cd "$wt" && REPO="$repo" BRANCH="$branch" WORKTREE="$wt" bash "$hook") \
-    || die "setup hook failed"
+  if ! (cd "$wt" && REPO="$repo" BRANCH="$branch" WORKTREE="$wt" bash "$hook"); then
+    echo "rc: setup hook failed — worktree is ready, opening session anyway" >&2
+  fi
 }
 
 attach_session() {

@@ -1,3 +1,4 @@
 codedb.snapshot
 setup.d/*
 !setup.d/example.sh
+.serena/
